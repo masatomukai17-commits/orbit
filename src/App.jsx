@@ -8,18 +8,12 @@ import AdminDashboard from './pages/AdminDashboard.jsx';
 
 function AppRouter() {
   const { currentUser } = useAuth();
-
   if (!currentUser) return <LoginPage />;
-
   switch (currentUser.role) {
-    case ROLES.STUDENT:
-      return <StudentDashboard />;
-    case ROLES.INSTRUCTOR:
-      return <InstructorDashboard />;
-    case ROLES.ADMIN:
-      return <AdminDashboard />;
-    default:
-      return <LoginPage />;
+    case ROLES.STUDENT: return <StudentDashboard />;
+    case ROLES.INSTRUCTOR: return <InstructorDashboard />;
+    case ROLES.ADMIN: return <AdminDashboard />;
+    default: return <LoginPage />;
   }
 }
 

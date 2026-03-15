@@ -1,13 +1,15 @@
 // ========================================
-// ORBIT — 定数定義
+// ORBIT v2.0 — 定数定義
 // ========================================
 
+// ---- ロール ----
 export const ROLES = {
   STUDENT: 'student',
   INSTRUCTOR: 'instructor',
   ADMIN: 'admin',
 };
 
+// ---- 学年 ----
 export const GRADES = {
   M5: 'M5',
   M6: 'M6',
@@ -15,67 +17,176 @@ export const GRADES = {
 };
 
 export const GRADE_LABELS = {
-  M5: '5年生',
-  M6: '6年生',
+  M5: '5年生(SGT)',
+  M6: '6年生(高次)',
   resident: '研修医',
 };
 
-// エコーラダー
-export const ECHO_CONTENTS = [
-  { id: 'e1', category: 'echo', title: '推定体重計測', description: 'BPD/AC/FLの計測', step3Required: 5, sortOrder: 1 },
-  { id: 'e2', category: 'echo', title: '胎児心拍確認', description: 'FHR の確認と評価', step3Required: 3, sortOrder: 2 },
-  { id: 'e3', category: 'echo', title: '羊水量評価', description: 'AFI/MVP の計測', step3Required: 3, sortOrder: 3 },
-  { id: 'e4', category: 'echo', title: '胎盤位置評価', description: '胎盤付着部位の評価', step3Required: 3, sortOrder: 4 },
-  { id: 'e5', category: 'echo', title: '経腟エコー', description: '子宮頸管長の計測', step3Required: 3, sortOrder: 5 },
+// ---- Echo Ladder コンテンツ ----
+export const ECHO_LADDER = [
+  { id: 'el1', title: '推定体重計測', practiceRequired: 5 },
+  { id: 'el2', title: 'Doppler計測(MCA・UA)', practiceRequired: 5 },
+  { id: 'el3', title: 'Screening', practiceRequired: 5 },
+  { id: 'el4', title: '心エコー', practiceRequired: 5 },
+  { id: 'el5', title: 'CNS', practiceRequired: 5 },
 ];
 
-// テクニックラダー
-export const TECHNIQUE_CONTENTS = [
-  { id: 't1', category: 'technique', title: '内診', description: '子宮口開大度・展退度', step3Required: 5, sortOrder: 1 },
-  { id: 't2', category: 'technique', title: '分娩介助', description: '正常分娩の介助', step3Required: 3, sortOrder: 2 },
-  { id: 't3', category: 'technique', title: '縫合', description: '会陰裂傷の縫合', step3Required: 3, sortOrder: 3 },
-];
-
-export const ALL_CONTENTS = [...ECHO_CONTENTS, ...TECHNIQUE_CONTENTS];
-
-// 逆評定の質問項目
-export const EVALUATION_CATEGORIES = [
-  { id: 'teaching', label: '教え方', description: '説明のわかりやすさ、手技の指導' },
-  { id: 'feedback', label: 'フィードバック', description: '建設的なフィードバックの質と頻度' },
-  { id: 'environment', label: '実習環境', description: '症例数、経験の多様性' },
-  { id: 'accessibility', label: '質問しやすさ', description: '指導医への質問のしやすさ' },
-  { id: 'overall', label: '総合評価', description: '全体的な実習の満足度' },
-];
-
-// アンケート：産婦人科選択に影響する因子
-export const INFLUENCE_FACTORS = [
-  { id: 'f1', label: '手技の面白さ' },
-  { id: 'f2', label: '指導医の人柄' },
-  { id: 'f3', label: '分娩の感動' },
-  { id: 'f4', label: '女性医療への関心' },
-  { id: 'f5', label: 'QOL・働き方' },
-  { id: 'f6', label: '給与・待遇' },
-  { id: 'f7', label: '同期・先輩の影響' },
-  { id: 'f8', label: 'エコーの楽しさ' },
-  { id: 'f9', label: '学問的興味' },
-  { id: 'f10', label: '実習内容の充実度' },
-];
-
-// 病院一覧
+// ---- 病院一覧 ----
 export const HOSPITALS = [
   { id: 'h1', name: '東北大学病院', shortName: '大学', type: 'university' },
   { id: 'h2', name: '仙台市立病院', shortName: '市立', type: 'affiliated' },
-  { id: 'h3', name: '東北公済病院', shortName: '公済', type: 'affiliated' },
-  { id: 'h4', name: '仙台赤十字病院', shortName: '赤十字', type: 'affiliated' },
-  { id: 'h5', name: '大崎市民病院', shortName: '大崎', type: 'affiliated' },
+  { id: 'h4', name: '大崎市民病院', shortName: '大崎', type: 'affiliated' },
+  { id: 'h5', name: '仙台赤十字病院', shortName: '赤十字', type: 'affiliated' },
+  { id: 'h6', name: '仙台医療センター', shortName: '医療C', type: 'affiliated' },
+  { id: 'h7', name: '石巻赤十字病院', shortName: '石巻', type: 'affiliated' },
+  { id: 'h8', name: 'スズキ記念病院', shortName: 'スズキ', type: 'affiliated' },
+  { id: 'h9', name: '坂総合病院', shortName: '坂総合', type: 'affiliated' },
+  { id: 'h10', name: '県南中核病院', shortName: '県南', type: 'affiliated' },
 ];
 
-// ストレージキー
-export const STORAGE_KEYS = {
-  USERS: 'orbit_users_v1',
-  PROGRESS: 'orbit_progress_v1',
-  PRACTICE_LOGS: 'orbit_practice_logs_v1',
-  EVALUATIONS: 'orbit_evaluations_v1',
-  SURVEYS: 'orbit_surveys_v1',
-  AUTH: 'orbit_auth_v1',
+// ---- 産科カテゴリ（戦闘力レーダー） ----
+export const OB_CATEGORIES = [
+  { id: 'ob_vd', label: '経腟分娩' },
+  { id: 'ob_inst', label: '器械分娩' },
+  { id: 'ob_cs', label: '帝王切開' },
+  { id: 'ob_echo', label: '経腹エコー' }, // echo ladderのpractice合計を反映
+  { id: 'ob_exam', label: '内診' },
+];
+
+// ---- 産科疾患群（マトリクス表示用） ----
+export const OB_DISEASES = [
+  { id: 'dis_hdp', label: 'HDP' },
+  { id: 'dis_twin', label: 'Twin' },
+  { id: 'dis_prom', label: 'PROM' },
+  { id: 'dis_preterm', label: 'Preterm' },
+  { id: 'dis_fgr', label: 'FGR' },  // 胎児発育不全 ※IUGR表記禁止
+  { id: 'dis_precs', label: 'pre C/S' },
+  { id: 'dis_previa', label: 'Previa' },
+  { id: 'dis_bel', label: 'BEL' },
+  { id: 'dis_multipara', label: '経産婦' },
+  { id: 'dis_primipara', label: '初産婦' },
+];
+
+// 産科マトリクスの縦軸
+export const OB_MATRIX_ROWS = [
+  { id: 'mx_vd', label: '経腟分娩' },
+  { id: 'mx_inst', label: '器械分娩' },
+  { id: 'mx_cs', label: '帝王切開' },
+  { id: 'mx_echo', label: '経腹エコー' },
+];
+
+// ---- 婦人科カテゴリ（戦闘力レーダー） ----
+export const GYN_CATEGORIES = [
+  { id: 'gyn_open', label: '開腹' },
+  { id: 'gyn_laparo', label: 'ラパロ' },
+  { id: 'gyn_robot', label: 'ロボット' },
+  { id: 'gyn_vaginal', label: '腟式' },
+  { id: 'gyn_hysteroscopy', label: '子宮鏡' },
+  { id: 'gyn_skill', label: '手技' },
+];
+
+// 婦人科サブ項目
+export const GYN_SUB_ITEMS = {
+  gyn_open: [
+    { id: 'go1', label: '単純子宮全摘術' },
+    { id: 'go2', label: '筋腫核出術' },
+    { id: 'go3', label: '付属器切除術' },
+    { id: 'go4', label: '子宮全摘術(リンパ節郭清含む)' },
+  ],
+  gyn_laparo: [
+    { id: 'gl1', label: '子宮全摘術' },
+    { id: 'gl2', label: '筋腫核出術' },
+    { id: 'gl3', label: '付属器切除術' },
+    { id: 'gl4', label: '異所性妊娠手術' },
+    { id: 'gl5', label: '仙骨腟固定術' },
+  ],
+  gyn_robot: [
+    { id: 'gr1', label: '子宮全摘術' },
+    { id: 'gr2', label: '筋腫核出術' },
+    { id: 'gr3', label: '仙骨腟固定術' },
+  ],
+  gyn_vaginal: [
+    { id: 'gv1', label: '円錐切除術' },
+    { id: 'gv2', label: '骨盤臓器脱手術' },
+    { id: 'gv3', label: '単純子宮全摘術' },
+    { id: 'gv4', label: '子宮内容除去術' },
+  ],
+  gyn_hysteroscopy: [
+    { id: 'gh1', label: '粘膜下筋腫切除術' },
+    { id: 'gh2', label: '内膜ポリープ切除術' },
+    { id: 'gh3', label: '中隔切除術' },
+  ],
+  gyn_skill: [
+    { id: 'gs1', label: '真皮縫合' },
+    { id: 'gs2', label: '器械縫合' },
+    { id: 'gs3', label: '糸結び' },
+    { id: 'gs4', label: 'ラパロカメラ持ち' },
+    { id: 'gs5', label: 'ラパロ操作' },
+  ],
 };
+
+// ---- 逆評定カテゴリ ----
+export const EVALUATION_CATEGORIES = [
+  { id: 'teaching', label: '教え方' },
+  { id: 'feedback', label: 'フィードバック' },
+  { id: 'environment', label: '実習環境' },
+  { id: 'accessibility', label: '質問のしやすさ' },
+  { id: 'overall', label: '総合評価' },
+];
+
+// ---- アンケート：良かったこと ----
+export const GOOD_POINTS = [
+  { id: 'gp1', label: '分娩の経験' },
+  { id: 'gp2', label: '手技の経験' },
+  { id: 'gp3', label: '多様な症例' },
+  { id: 'gp4', label: '手術' },
+  { id: 'gp5', label: 'チーム医療' },
+  { id: 'gp6', label: '患者対応' },
+  { id: 'gp7', label: '当直実習' },
+  { id: 'gp8', label: '講義や手技の実習' },
+  { id: 'gp9', label: 'このアプリ' },
+];
+
+// ---- アンケート：不足に感じたこと ----
+export const BAD_POINTS = [
+  { id: 'bp1', label: '症例数' },
+  { id: 'bp2', label: '手技の機会' },
+  { id: 'bp3', label: '指導時間' },
+  { id: 'bp4', label: 'フィードバック' },
+  { id: 'bp5', label: '自己学習時間' },
+  { id: 'bp6', label: '特に無し' },
+  { id: 'bp7', label: 'その他' },
+];
+
+// ---- localStorage keys ----
+export const STORAGE_KEYS = {
+  USERS: 'orbit_users',
+  LADDER_PROGRESS: 'orbit_ladder_progress',
+  LADDER_LOGS: 'orbit_ladder_logs',
+  OB_CASES: 'orbit_ob_cases',
+  GYN_CASES: 'orbit_gyn_cases',
+  OB_MATRIX: 'orbit_ob_matrix',
+  LAPARO_TIMES: 'orbit_laparo_times',
+  EVALUATIONS: 'orbit_evaluations',
+  SURVEYS: 'orbit_surveys',
+  AUTH: 'orbit_auth',
+};
+
+// ---- 学生タブ定義 ----
+export const STUDENT_TABS = [
+  { id: 'home', label: 'ホーム', icon: 'Home' },
+  { id: 'ladder', label: 'Echo Ladder', icon: 'Layers' },
+  { id: 'combat', label: '戦闘力', icon: 'Zap' },
+  { id: 'laparo', label: 'ラパロタイム', icon: 'Timer' },
+  { id: 'eval', label: '逆評定', icon: 'Star' },
+  { id: 'survey', label: 'アンケート', icon: 'ClipboardList' },
+];
+
+// ---- 先生タブ定義 ----
+export const INSTRUCTOR_TABS = [
+  { id: 'students', label: '学生一覧', icon: 'Users' },
+  { id: 'compare', label: '全体比較', icon: 'BarChart3' },
+  { id: 'hospital', label: '関連病院比較', icon: 'Building2' },
+  { id: 'teaching', label: '指導', icon: 'Award' },
+  { id: 'settings', label: '設定', icon: 'Settings' },
+];

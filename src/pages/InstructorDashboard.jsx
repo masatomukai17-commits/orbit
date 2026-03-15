@@ -1,158 +1,361 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useData } from '../contexts/DataContext.jsx';
-import { ECHO_CONTENTS, TECHNIQUE_CONTENTS, GRADE_LABELS, HOSPITALS } from '../data/constants.js';
-import { getContentProgress, getLogs } from '../data/store.js';
+import { INSTRUCTOR_TABS, GRADES, GRADE_LABELS, HOSPITALS, ECHO_LADDER, EVALUATION_CATEGORIES, OB_CATEGORIES, GYN_CATEGORIES, GYN_SUB_ITEMS } from '../data/constants.js';
+import { calcLadderCompletion, calcTotalEchoPractice, calcObTotal, calcGynTotal, calcHospitalEvalAverages } from '../data/store.js';
 import Header from '../components/Header.jsx';
-import StepEditor from '../components/StepEditor.jsx';
+import LadderTab from '../components/student/LadderTab.jsx';
+import CombatTab from '../components/student/CombatTab.jsx';
+import LaparoTab from '../components/student/LaparoTab.jsx';
 
 export default function InstructorDashboard() {
   const { currentUser } = useAuth();
-  const { users, progress, practiceLogs, evaluations } = useData();
-  const [activeTab, setActiveTab] = useState('heatmap');
-  const [selectedCell, setSelectedCell] = useState(null);
+  const { users, ladderProgress, obCases, gynCases, laparoTimes, evaluations, surveys, updateUser } = useData();
+  const [activeTab, setActiveTab] = useState('students');
+  const [viewStudent, setViewStudent] = useState(null);
+  const [studentTab, setStudentTab] = useState('ladder');
+  const [editUser, setEditUser] = useState(null);
+  const [gradeFilter, setGradeFilter] = useState('M5'); // M5 or M6
+  const [showMode, setShowMode] = useState('current'); // current or all
 
-  const tabs = [
-    { id: 'heatmap', label: 'ヒートマップ', icon: '🗺️' },
-    { id: 'myEvals', label: '逆評定結果', icon: '⭐' },
+  const students = users.filter(u => u.role === 'student' && u.grade !== GRADES.RESIDENT);
+
+  const getStudentStats = (s) => {
+    const gradesUsed = s.grade === GRADES.M6 ? [GRADES.M5, GRADES.M6] : [s.grade];
+    const ladderPct = calcLadderCompletion(ladderProgress, s.id, s.grade);
+    const echoTotal = calcTotalEchoPractice(ladderProgress, s.id, gradesUsed);
+    const obTotal = calcObTotal(obCases, s.id, echoTotal);
+    const gynTotal = calcGynTotal(gynCases, s.id);
+    const times = laparoTimes[s.id] || [];
+    const bestLaparo = times.length > 0 ? Math.min(...times.map(t => t.seconds)) : null;
+    return { ladderPct, obTotal, gynTotal, bestLaparo };
+  };
+
+  // Student detail view
+  const studentViewTabs = [
+    { id: 'ladder', label: 'Ladder' },
+    { id: 'combat', label: '戦闘力' },
+    { id: 'laparo', label: 'ラパロ' },
   ];
 
-  // Students at this instructor's hospital
-  const myStudents = users.filter(u => u.role === 'student' && u.hospitalId === currentUser.hospitalId);
-
-  const renderHeatmapCell = (student, content) => {
-    const p = getContentProgress(progress, student.id, student.grade, content.id);
-    const logCount = getLogs(practiceLogs, student.id, student.grade, content.id).length;
-    const pCount = logCount || p.practiceCount;
-    const pDone = pCount >= content.step3Required;
-    const allDone = p.videoDone && p.quizDone && pDone;
-
+  if (viewStudent) {
     return (
-      <td
-        key={content.id}
-        onClick={() => setSelectedCell({ student, content })}
-        className={`px-1 py-1.5 text-center cursor-pointer border border-gray-100 hover:ring-2 hover:ring-pink-300 transition text-xs ${
-          allDone ? 'bg-green-100' : pCount > 0 || p.videoDone ? 'bg-yellow-50' : 'bg-white'
-        }`}
-      >
-        <div className="leading-tight">
-          <span className={p.videoDone ? 'text-green-600' : 'text-gray-300'}>V{p.videoDone ? '✓' : '·'}</span>
-          {' '}
-          <span className={p.quizDone ? 'text-green-600' : 'text-gray-300'}>Q{p.quizDone ? '✓' : '·'}</span>
-          <br />
-          <span className={pDone ? 'text-green-600 font-bold' : pCount > 0 ? 'text-yellow-600' : 'text-gray-300'}>
-            P{pCount}/{content.step3Required}
-          </span>
-        </div>
-      </td>
+      <div className="min-h-screen bg-gray-50">
+        <Header tabs={studentViewTabs} activeTab={studentTab} onTabChange={setStudentTab} />
+        <main className="max-w-6xl mx-auto p-4">
+          <button onClick={() => setViewStudent(null)} className="text-xs text-pink-500 hover:text-pink-700 mb-3">&larr; 学生一覧に戻る</button>
+          <div className="bg-pink-50 rounded-lg p-2 mb-4 text-sm font-medium text-pink-700">{viewStudent.name} ({GRADE_LABELS[viewStudent.grade]}) の詳細</div>
+          {studentTab === 'ladder' && <LadderTab viewStudentId={viewStudent.id} viewGrade={viewStudent.grade} />}
+          {studentTab === 'combat' && <CombatTab viewStudentId={viewStudent.id} />}
+          {studentTab === 'laparo' && <LaparoTab viewStudentId={viewStudent.id} />}
+        </main>
+      </div>
+    );
+  }
+
+  // Filter students
+  const filteredStudents = students.filter(s => s.grade === gradeFilter);
+  const currentStudents = filteredStudents.filter(s => s.isCurrentRotation);
+  const pastStudents = filteredStudents.filter(s => !s.isCurrentRotation);
+  const displayStudents = showMode === 'current' ? currentStudents : filteredStudents;
+
+  // Get affiliated hospital display
+  const getAffiliatedDisplay = (s) => {
+    const affHosp = HOSPITALS.find(h => h.id === s.affiliatedHospitalId);
+    if (s.grade === GRADES.M5) {
+      // 5年生: A班 / 関連病院名
+      return `${s.group} / ${affHosp?.shortName || '未定'}`;
+    } else {
+      // 6年生: X班 / 大学Nw + 関連病院名
+      const rotations = s.affiliatedRotations || [];
+      const parts = [`大学${s.universityWeeks || 0}w`];
+      rotations.forEach(r => {
+        const h = HOSPITALS.find(h2 => h2.id === r.hospitalId);
+        parts.push(`${h?.shortName || ''}${r.weeks}w`);
+      });
+      return `${s.group} / ${parts.join('+')}`;
+    }
+  };
+
+  const renderStudentCard = (s) => {
+    const stats = getStudentStats(s);
+    return (
+      <div key={s.id} className="bg-white rounded-xl shadow-sm p-3 relative">
+        {/* 歯車ボタン */}
+        <button onClick={(e) => { e.stopPropagation(); setEditUser(s); }}
+          className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 text-sm">⚙️</button>
+
+        <button onClick={() => { setViewStudent(s); setStudentTab('ladder'); }}
+          className="w-full text-left">
+          <div className="mb-2">
+            <span className="font-medium text-sm text-gray-800">{s.name}</span>
+            {s.isCurrentRotation && <span className="ml-1 text-[9px] bg-green-100 text-green-700 px-1 rounded">ローテ中</span>}
+            <div className="text-[10px] text-gray-400 mt-0.5">{getAffiliatedDisplay(s)}</div>
+          </div>
+          <div className="flex gap-3 text-[10px]">
+            <div className="flex-1">
+              <div className="text-gray-400 mb-0.5">Ladder</div>
+              <div className="w-full bg-gray-200 rounded-full h-1.5">
+                <div className="bg-pink-500 h-1.5 rounded-full" style={{ width: `${stats.ladderPct}%` }} />
+              </div>
+              <span className="text-gray-600">{stats.ladderPct}%</span>
+            </div>
+            <div className="text-center">
+              <div className="text-gray-400">産科</div>
+              <div className="font-bold text-pink-600">{stats.obTotal}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-gray-400">婦人科</div>
+              <div className="font-bold text-purple-600">{stats.gynTotal}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-gray-400">ラパロ</div>
+              <div className="font-bold text-gray-700">{stats.bestLaparo ? `${stats.bestLaparo}秒` : '-'}</div>
+            </div>
+          </div>
+        </button>
+      </div>
     );
   };
 
-  const renderHeatmap = (title, contents) => (
-    <div className="mb-6">
-      <h3 className="text-sm font-bold text-gray-600 mb-2">{title}</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-2 py-2 text-left text-xs text-gray-500 font-medium sticky left-0 bg-gray-50 z-10">学生</th>
-              {contents.map(c => (
-                <th key={c.id} className="px-1 py-2 text-xs text-gray-500 font-medium whitespace-nowrap">{c.title}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {myStudents.map(student => (
-              <tr key={student.id} className="border-t border-gray-100">
-                <td className="px-2 py-1.5 text-xs font-medium text-gray-700 sticky left-0 bg-white z-10 whitespace-nowrap">
-                  {student.name}
-                  <span className="text-gray-400 ml-1">({GRADE_LABELS[student.grade]})</span>
-                </td>
-                {contents.map(c => renderHeatmapCell(student, c))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {myStudents.length === 0 && (
-        <div className="text-center text-gray-400 py-8">この病院にローテ中の学生はいません</div>
-      )}
-    </div>
-  );
-
-  // My evaluations (reverse evaluations about this hospital)
-  const myHospitalEvals = evaluations.filter(e => e.hospitalId === currentUser.hospitalId);
-
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} tabs={tabs} />
-
+      <Header tabs={INSTRUCTOR_TABS} activeTab={activeTab} onTabChange={setActiveTab} />
       <main className="max-w-6xl mx-auto p-4">
-        {activeTab === 'heatmap' && (
-          <>
-            <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-gray-800">ローテ学生進捗</h2>
-                <span className="text-sm text-gray-400">{HOSPITALS.find(h => h.id === currentUser.hospitalId)?.name}</span>
-              </div>
-              {renderHeatmap('エコーラダー', ECHO_CONTENTS)}
-              {renderHeatmap('テクニックラダー', TECHNIQUE_CONTENTS)}
+        {/* 学生一覧 */}
+        {activeTab === 'students' && (
+          <div>
+            {/* 学年タブ */}
+            <div className="flex gap-2 mb-3">
+              <button onClick={() => setGradeFilter('M5')}
+                className={`px-4 py-1.5 text-xs rounded-lg font-medium ${gradeFilter === 'M5' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-600'}`}>5年生</button>
+              <button onClick={() => setGradeFilter('M6')}
+                className={`px-4 py-1.5 text-xs rounded-lg font-medium ${gradeFilter === 'M6' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-600'}`}>6年生</button>
             </div>
-            <div className="flex items-center gap-4 text-xs text-gray-400 justify-center">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-100 border border-green-300" /> 完了</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-50 border border-yellow-300" /> 途中</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-white border border-gray-200" /> 未着手</span>
+            {/* 現在ローテ / 全学生 切替 */}
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => setShowMode('current')}
+                className={`px-3 py-1 text-[10px] rounded ${showMode === 'current' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'}`}>現在ローテ中</button>
+              <button onClick={() => setShowMode('all')}
+                className={`px-3 py-1 text-[10px] rounded ${showMode === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'}`}>過去含む全学生</button>
             </div>
-          </>
-        )}
 
-        {activeTab === 'myEvals' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-gray-800">学生からの逆評定（匿名）</h2>
-            {myHospitalEvals.length === 0 ? (
-              <div className="text-center text-gray-400 py-12">まだ評価がありません</div>
+            <h3 className="font-bold text-sm text-gray-600 mb-2">
+              {GRADE_LABELS[gradeFilter]}（{displayStudents.length}名{showMode === 'current' ? ' ローテ中' : ''}）
+            </h3>
+            {displayStudents.length === 0 ? (
+              <p className="text-xs text-gray-400">該当なし</p>
             ) : (
-              <>
-                {/* Average scores */}
-                <div className="bg-white rounded-xl p-4 shadow-sm">
-                  <h3 className="text-sm font-bold text-gray-600 mb-3">平均スコア（{myHospitalEvals.length}件）</h3>
-                  <div className="grid grid-cols-5 gap-3">
-                    {['teaching', 'feedback', 'environment', 'accessibility', 'overall'].map(cat => {
-                      const avg = myHospitalEvals.reduce((s, e) => s + (e.scores[cat] || 0), 0) / myHospitalEvals.length;
-                      const labels = { teaching: '教え方', feedback: 'FB', environment: '環境', accessibility: '質問', overall: '総合' };
-                      return (
-                        <div key={cat} className="text-center">
-                          <div className="text-2xl font-bold text-pink-600">{avg.toFixed(1)}</div>
-                          <div className="text-xs text-gray-400">{labels[cat]}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                {/* Comments */}
-                <div className="space-y-2">
-                  {myHospitalEvals.filter(e => e.comment).map(ev => (
-                    <div key={ev.id} className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 text-sm text-gray-600">
-                      <p>"{ev.comment}"</p>
-                      <div className="text-xs text-gray-400 mt-1">{ev.rotationPeriod} / {GRADE_LABELS[ev.grade]}</div>
-                    </div>
-                  ))}
-                </div>
-              </>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {displayStudents.map(s => renderStudentCard(s))}
+              </div>
             )}
           </div>
         )}
-      </main>
 
-      {/* StepEditor Modal */}
-      {selectedCell && (
-        <StepEditor
-          content={selectedCell.content}
-          studentId={selectedCell.student.id}
-          grade={selectedCell.student.grade}
-          onClose={() => setSelectedCell(null)}
-        />
-      )}
+        {/* 全体比較 */}
+        {activeTab === 'compare' && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-gray-800">全体比較</h2>
+            {['Ladder完了率', '産科戦闘力', '婦人科戦闘力', 'ラパロベスト'].map((metric, mi) => (
+              <div key={metric} className="bg-white rounded-xl shadow-sm p-4">
+                <h3 className="font-bold text-sm text-gray-700 mb-2">{metric}</h3>
+                <div className="space-y-1">
+                  {[...students].sort((a, b) => {
+                    const sa = getStudentStats(a);
+                    const sb = getStudentStats(b);
+                    const vals = [
+                      [sa.ladderPct, sb.ladderPct],
+                      [sa.obTotal, sb.obTotal],
+                      [sa.gynTotal, sb.gynTotal],
+                      [sa.bestLaparo || 9999, sb.bestLaparo || 9999],
+                    ];
+                    return mi === 3 ? vals[mi][0] - vals[mi][1] : vals[mi][1] - vals[mi][0];
+                  }).map((s, i) => {
+                    const stats = getStudentStats(s);
+                    const val = [stats.ladderPct + '%', stats.obTotal, stats.gynTotal, stats.bestLaparo ? stats.bestLaparo + '秒' : '-'][mi];
+                    return (
+                      <div key={s.id} className="flex items-center gap-2 text-xs py-1">
+                        <span className="w-5 text-gray-400">{i + 1}.</span>
+                        <span className="flex-1 text-gray-700">{s.name}</span>
+                        <span className="text-[10px] text-gray-400">{GRADE_LABELS[s.grade]}</span>
+                        <span className="font-bold text-pink-600 w-12 text-right">{val}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 関連病院比較 */}
+        {activeTab === 'hospital' && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-gray-800">関連病院比較</h2>
+            {HOSPITALS.filter(h => h.type === 'affiliated').map(hosp => {
+              const evalAvgs = calcHospitalEvalAverages(evaluations, hosp.id);
+              const hospSurveys = surveys.filter(sv => sv.hospitalId === hosp.id);
+              // 過去にこの病院をローテした学生
+              const rotatedStudents = students.filter(s => {
+                const rotations = s.affiliatedRotations || [];
+                return rotations.some(r => r.hospitalId === hosp.id) || s.affiliatedHospitalId === hosp.id;
+              });
+
+              return (
+                <div key={hosp.id} className="bg-white rounded-xl shadow-sm p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-bold text-sm text-gray-700">{hosp.name}</h3>
+                    <span className="text-[10px] text-gray-400">ローテ{rotatedStudents.length}名</span>
+                  </div>
+                  {evalAvgs && (
+                    <div className="flex gap-2 mb-2">
+                      {EVALUATION_CATEGORIES.map(cat => (
+                        <div key={cat.id} className="text-center text-[10px]">
+                          <div className="text-gray-400">{cat.label}</div>
+                          <div className={`font-bold ${evalAvgs[cat.id] >= 4 ? 'text-green-600' : evalAvgs[cat.id] >= 3 ? 'text-yellow-600' : 'text-red-500'}`}>
+                            {evalAvgs[cat.id]}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {hospSurveys.length > 0 && (
+                    <div className="text-[10px] text-gray-500 mb-2">
+                      アンケート回答: {hospSurveys.length}件 |
+                      満足度平均: {(hospSurveys.reduce((s, sv) => s + sv.satisfaction, 0) / hospSurveys.length).toFixed(1)}
+                    </div>
+                  )}
+                  {/* 過去ローテ学生の経験症例 */}
+                  {rotatedStudents.length > 0 && (
+                    <div className="mt-2 border-t pt-2">
+                      <div className="text-[10px] font-medium text-gray-600 mb-1">ローテ学生の経験症例</div>
+                      {rotatedStudents.map(s => {
+                        const stats = getStudentStats(s);
+                        return (
+                          <div key={s.id} className="flex items-center gap-2 text-[10px] py-0.5">
+                            <span className="text-gray-600 w-20">{s.name}</span>
+                            <span className="text-gray-400">{GRADE_LABELS[s.grade]}</span>
+                            <span className="text-pink-600">産{stats.obTotal}</span>
+                            <span className="text-purple-600">婦{stats.gynTotal}</span>
+                            <span className="text-gray-500">ラパロ{stats.bestLaparo ? stats.bestLaparo + '秒' : '-'}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {!evalAvgs && hospSurveys.length === 0 && rotatedStudents.length === 0 && (
+                    <p className="text-[10px] text-gray-400">データなし</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 指導タブ */}
+        {activeTab === 'teaching' && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-gray-800">指導実績</h2>
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <h3 className="font-bold text-sm text-gray-700 mb-2">「熱心な先生」選出回数</h3>
+              {(() => {
+                const teacherCounts = {};
+                evaluations.forEach(ev => {
+                  if (ev.enthusiasticTeacher) {
+                    teacherCounts[ev.enthusiasticTeacher] = (teacherCounts[ev.enthusiasticTeacher] || 0) + 1;
+                  }
+                });
+                const sorted = Object.entries(teacherCounts).sort((a, b) => b[1] - a[1]);
+                if (sorted.length === 0) return <p className="text-xs text-gray-400">データなし</p>;
+                return sorted.map(([name, count], i) => (
+                  <div key={name} className="flex items-center gap-2 text-xs py-1 border-b border-gray-50">
+                    <span className="w-5 text-gray-400">{i + 1}.</span>
+                    <span className="flex-1 text-gray-700">{name}</span>
+                    <span className="font-bold text-pink-600">{count}回</span>
+                  </div>
+                ));
+              })()}
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <h3 className="font-bold text-sm text-gray-700 mb-2">Ladder承認（ログ指導）回数</h3>
+              <p className="text-xs text-gray-400">Ladder実技ログの指導医フィールドから自動集計されます</p>
+            </div>
+          </div>
+        )}
+
+        {/* 設定 */}
+        {activeTab === 'settings' && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-gray-800">設定</h2>
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <h3 className="font-bold text-sm text-gray-700 mb-3">生徒管理</h3>
+              <div className="space-y-2">
+                {students.map(s => {
+                  return (
+                    <div key={s.id} className="flex items-center gap-2 text-xs py-1.5 border-b border-gray-50">
+                      <span className="flex-1 font-medium">{s.name}</span>
+                      <span className="text-gray-400">{GRADE_LABELS[s.grade]}</span>
+                      <span className="text-gray-400">{s.group}</span>
+                      <span className="text-gray-400">{getAffiliatedDisplay(s)}</span>
+                      <button onClick={() => setEditUser(s)}
+                        className="text-pink-500 hover:text-pink-700 text-[10px]">編集</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <h3 className="font-bold text-sm text-gray-700 mb-2">データ管理</h3>
+              <button onClick={() => {
+                if (confirm('全データをリセットしますか？')) {
+                  Object.keys(localStorage).filter(k => k.startsWith('orbit_')).forEach(k => localStorage.removeItem(k));
+                  window.location.reload();
+                }
+              }}
+                className="text-xs text-red-500 hover:text-red-700 border border-red-200 px-3 py-1.5 rounded">
+                全データリセット
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Edit modal */}
+        {editUser && (
+          <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
+              <h3 className="font-bold text-sm">生徒情報編集</h3>
+              <input value={editUser.name} onChange={e => setEditUser(p => ({ ...p, name: e.target.value }))}
+                className="w-full text-xs border rounded px-2 py-1.5" placeholder="名前" />
+              <select value={editUser.grade || ''} onChange={e => setEditUser(p => ({ ...p, grade: e.target.value }))}
+                className="w-full text-xs border rounded px-2 py-1.5">
+                <option value="M5">5年生(SGT)</option>
+                <option value="M6">6年生(高次)</option>
+              </select>
+              <input value={editUser.group || ''} onChange={e => setEditUser(p => ({ ...p, group: e.target.value }))}
+                className="w-full text-xs border rounded px-2 py-1.5" placeholder="班名" />
+              <select value={editUser.affiliatedHospitalId || ''} onChange={e => setEditUser(p => ({ ...p, affiliatedHospitalId: e.target.value }))}
+                className="w-full text-xs border rounded px-2 py-1.5">
+                <option value="">関連病院未定</option>
+                {HOSPITALS.filter(h => h.type === 'affiliated').map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+              </select>
+              <input value={editUser.email || ''} onChange={e => setEditUser(p => ({ ...p, email: e.target.value }))}
+                className="w-full text-xs border rounded px-2 py-1.5" placeholder="メールアドレス" />
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={editUser.isCurrentRotation || false}
+                  onChange={e => setEditUser(p => ({ ...p, isCurrentRotation: e.target.checked }))} />
+                現在ローテ中
+              </label>
+              <div className="flex gap-2">
+                <button onClick={() => { updateUser(editUser.id, editUser); setEditUser(null); }}
+                  className="flex-1 text-xs bg-pink-500 text-white py-2 rounded-lg">保存</button>
+                <button onClick={() => setEditUser(null)}
+                  className="flex-1 text-xs bg-gray-200 text-gray-600 py-2 rounded-lg">キャンセル</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
